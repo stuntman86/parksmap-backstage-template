@@ -46,17 +46,116 @@ spec:
             - v1.0
             - dev
   steps:
-    - id: create-manifests
-      name: Generate Deployment Manifests
-      action: roadiehq:utils:fs:write
+    - id: log-info
+      name: Log Deployment Information
+      action: debug:log
       input:
-        path: deployment.yaml
-        content: |
-          apiVersion: v1
-          kind: Namespace
+        message: |
+          🚀 Deploying Parksmap Web Application:
+          - Name: ${{ parameters.name }}
+          - Namespace: ${{ parameters.namespace }}
+          - Replicas: ${{ parameters.replicas }}
+          - Image: quay.io/gpagiata/parksmap-web:${{ parameters.imageTag }}
+          
+          Generating OpenShift deployment manifests...
+
+    - id: create-namespace
+      name: Create Namespace
+      action: debug:log
+      input:
+        message: |
+          Creating namespace: ${{ parameters.namespace }}
+          
+          kubectl create namespace ${{ parameters.namespace }} --dry-run=client -o yaml | kubectl apply -f -
+
+    - id: deploy-app
+      name: Deploy Application
+      action: debug:log
+      input:
+        message: |
+          Deploying application with these manifests:
+          
+          # Deployment
+          apiVersion: apps/v1
+          kind: Deployment
           metadata:
-            name: ${{ parameters.namespace }}
+            name: ${{ parameters.name }}
+            namespace: ${{ parameters.namespace }}
+            labels:
+              app: ${{ parameters.name }}
+          spec:
+            replicas: ${{ parameters.replicas }}
+            selector:
+              matchLabels:
+                app: ${{ parameters.name }}
+            template:
+              metadata:
+                labels:
+                  app: ${{ parameters.name }}
+              spec:
+                containers:
+                - name: parksmap
+                  image: quay.io/gpagiata/parksmap-web:${{ parameters.imageTag }}
+                  ports:
+                  - containerPort: 8080
+                  resources:
+                    requests:
+                      memory: "256Mi"
+                      cpu: "100m"
+                    limits:
+                      memory: "512Mi"
+                      cpu: "500m"
+          
           ---
+          # Service
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: ${{ parameters.name }}
+            namespace: ${{ parameters.namespace }}
+          spec:
+            selector:
+              app: ${{ parameters.name }}
+            ports:
+            - port: 8080
+              targetPort: 8080
+          
+          ---
+          # Route
+          apiVersion: route.openshift.io/v1
+          kind: Route
+          metadata:
+            name: ${{ parameters.name }}
+            namespace: ${{ parameters.namespace }}
+          spec:
+            to:
+              kind: Service
+              name: ${{ parameters.name }}
+            port:
+              targetPort: 8080
+            tls:
+              termination: edge
+
+  output:
+    text:
+      - title: Deployment Manifests Generated!
+        content: |
+          🎉 **Parksmap Application Ready for Deployment!**
+          
+          **Configuration:**
+          - **Application**: ${{ parameters.name }}
+          - **Namespace**: ${{ parameters.namespace }}
+          - **Image**: quay.io/gpagiata/parksmap-web:${{ parameters.imageTag }}
+          - **Replicas**: ${{ parameters.replicas }}
+          
+          **Next Steps - Apply these commands to OpenShift:**
+          
+          ```bash
+          # Create namespace
+          oc create namespace ${{ parameters.namespace }}
+          
+          # Deploy the application
+          oc apply -f - << 'EOF'
           apiVersion: apps/v1
           kind: Deployment
           metadata:
@@ -112,30 +211,11 @@ spec:
               targetPort: 8080
             tls:
               termination: edge
-
-    - id: apply-deployment
-      name: Deploy to OpenShift
-      action: kubernetes:apply
-      input:
-        manifestPath: deployment.yaml
-        namespaced: true
-
-  output:
-    text:
-      - title: Deployment Complete!
-        content: |
-          🚀 **Parksmap Application Deployed Successfully!**
+          EOF
           
-          **Deployment Details:**
-          - **Application**: ${{ parameters.name }}
-          - **Namespace**: ${{ parameters.namespace }}
-          - **Image**: quay.io/gpagiata/parksmap-web:${{ parameters.imageTag }}
-          - **Replicas**: ${{ parameters.replicas }}
+          # Get the route URL
+          oc get route ${{ parameters.name }} -n ${{ parameters.namespace }}
+          ```
           
-          **Access your application:**
-          - Route: https://${{ parameters.name }}-${{ parameters.namespace }}.apps.lme876y3k0d5f0456e.eastus.aroapp.io
-          
-          **Next Steps:**
-          1. Check OpenShift console for pod status
-          2. Access the application via the route URL
-          3. Monitor application logs if needed
+          **Expected Route URL:**
+          https://${{ parameters.name }}-${{ parameters.namespace }}.apps.lme876y3k0d5f0456e.eastus.aroapp.io
