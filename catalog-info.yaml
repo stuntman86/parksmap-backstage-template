@@ -1,0 +1,8 @@
+apiVersion: backstage.io/v1alpha1
+kind: Location
+metadata:
+  name: parksmap-templates
+  description: Parksmap application templates for Red Hat Developer Hub
+spec:
+  targets:
+    - ./template.yaml

@@ -1,0 +1,66 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: deploy-parksmap-web
+  title: Deploy Parksmap Web Application
+  description: Deploy your Parksmap application from Quay.io to OpenShift
+  tags:
+    - recommended
+    - parksmap
+    - openshift
+    - quay
+spec:
+  owner: platform-team
+  type: service
+  parameters:
+    - title: Application Configuration
+      required:
+        - name
+        - namespace
+      properties:
+        name:
+          title: Application Name
+          type: string
+          description: Name for your parksmap deployment
+          default: 'parksmap-web'
+          pattern: '^[a-z0-9-]+$'
+        namespace:
+          title: Target Namespace
+          type: string
+          description: OpenShift namespace to deploy to
+          default: 'parksmap-demo'
+        replicas:
+          title: Number of Replicas
+          type: integer
+          description: Number of pod replicas
+          default: 2
+          minimum: 1
+          maximum: 5
+        imageTag:
+          title: Image Tag
+          type: string
+          description: Image tag to deploy
+          default: 'latest'
+  steps:
+    - id: log
+      name: Log Deployment Info
+      action: debug:log
+      input:
+        message: |
+          Deploying Parksmap Web Application:
+          - Name: ${{ parameters.name }}
+          - Namespace: ${{ parameters.namespace }}
+          - Replicas: ${{ parameters.replicas }}
+          - Image: quay.io/gpagiata/parksmap-web:${{ parameters.imageTag }}
+  output:
+    text:
+      - title: Deployment Configuration
+        content: |
+          **Parksmap Web Application Ready for Deployment**
+          
+          - **Application**: ${{ parameters.name }}
+          - **Namespace**: ${{ parameters.namespace }}
+          - **Image**: quay.io/gpagiata/parksmap-web:${{ parameters.imageTag }}
+          - **Replicas**: ${{ parameters.replicas }}
+          
+          Next: Use OpenShift console or CLI to apply the generated manifests.
