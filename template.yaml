@@ -3,12 +3,12 @@ kind: Template
 metadata:
   name: deploy-parksmap-web
   title: Deploy Parksmap Web Application
-  description: Deploy your Parksmap application from Quay.io to OpenShift
+  description: Deploy your existing Parksmap application from Quay.io directly to OpenShift
   tags:
     - recommended
     - parksmap
     - openshift
-    - quay
+    - deployment
 spec:
   owner: platform-team
   type: service
@@ -41,61 +41,101 @@ spec:
           type: string
           description: Image tag to deploy
           default: 'latest'
-    - title: Repository Information
-      required:
-        - repoUrl
-      properties:
-        repoUrl:
-          title: Repository Location
-          type: string
-          ui:field: RepoUrlPicker
-          ui:options:
-            allowedHosts:
-              - github.com
+          enum:
+            - latest
+            - v1.0
+            - dev
   steps:
-    - id: fetch
-      name: Fetch Skeleton + Template
-      action: fetch:template
+    - id: create-manifests
+      name: Generate Deployment Manifests
+      action: roadiehq:utils:fs:write
       input:
-        url: ./skeleton
-        values:
-          name: ${{ parameters.name }}
-          namespace: ${{ parameters.namespace }}
-          replicas: ${{ parameters.replicas }}
-          imageTag: ${{ parameters.imageTag }}
-    
-    - id: publish
-      name: Publish
-      action: publish:github
+        path: deployment.yaml
+        content: |
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: ${{ parameters.namespace }}
+          ---
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: ${{ parameters.name }}
+            namespace: ${{ parameters.namespace }}
+            labels:
+              app: ${{ parameters.name }}
+          spec:
+            replicas: ${{ parameters.replicas }}
+            selector:
+              matchLabels:
+                app: ${{ parameters.name }}
+            template:
+              metadata:
+                labels:
+                  app: ${{ parameters.name }}
+              spec:
+                containers:
+                - name: parksmap
+                  image: quay.io/gpagiata/parksmap-web:${{ parameters.imageTag }}
+                  ports:
+                  - containerPort: 8080
+                  resources:
+                    requests:
+                      memory: "256Mi"
+                      cpu: "100m"
+                    limits:
+                      memory: "512Mi"
+                      cpu: "500m"
+          ---
+          apiVersion: v1
+          kind: Service
+          metadata:
+            name: ${{ parameters.name }}
+            namespace: ${{ parameters.namespace }}
+          spec:
+            selector:
+              app: ${{ parameters.name }}
+            ports:
+            - port: 8080
+              targetPort: 8080
+          ---
+          apiVersion: route.openshift.io/v1
+          kind: Route
+          metadata:
+            name: ${{ parameters.name }}
+            namespace: ${{ parameters.namespace }}
+          spec:
+            to:
+              kind: Service
+              name: ${{ parameters.name }}
+            port:
+              targetPort: 8080
+            tls:
+              termination: edge
+
+    - id: apply-deployment
+      name: Deploy to OpenShift
+      action: kubernetes:apply
       input:
-        allowedHosts: ['github.com']
-        description: Parksmap deployment for ${{ parameters.name }}
-        repoUrl: ${{ parameters.repoUrl }}
-    
-    - id: register
-      name: Register
-      action: catalog:register
-      input:
-        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
-        catalogInfoPath: '/catalog-info.yaml'
+        manifestPath: deployment.yaml
+        namespaced: true
 
   output:
-    links:
-      - title: Repository
-        url: ${{ steps.publish.output.remoteUrl }}
-      - title: Open in catalog
-        icon: catalog
-        entityRef: ${{ steps.register.output.entityRef }}
     text:
-      - title: Next Steps
+      - title: Deployment Complete!
         content: |
-          Your Parksmap application repository has been created!
+          🚀 **Parksmap Application Deployed Successfully!**
           
-          **What was created:**
-          - GitHub repository with deployment manifests
-          - Component registered in the catalog
+          **Deployment Details:**
+          - **Application**: ${{ parameters.name }}
+          - **Namespace**: ${{ parameters.namespace }}
+          - **Image**: quay.io/gpagiata/parksmap-web:${{ parameters.imageTag }}
+          - **Replicas**: ${{ parameters.replicas }}
           
-          **Next steps:**
-          1. Check the generated repository
-          2. Review the deployment manifests
-          3. Apply to OpenShift using the generated YAML files
+          **Access your application:**
+          - Route: https://${{ parameters.name }}-${{ parameters.namespace }}.apps.lme876y3k0d5f0456e.eastus.aroapp.io
+          
+          **Next Steps:**
+          1. Check OpenShift console for pod status
+          2. Access the application via the route URL
+          3. Monitor application logs if needed
