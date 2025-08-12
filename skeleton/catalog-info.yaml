@@ -1,0 +1,15 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: ${{ values.name }}
+  description: Parksmap Web Application
+  tags:
+    - parksmap
+    - web
+  annotations:
+    backstage.io/kubernetes-id: ${{ values.name }}
+spec:
+  type: service
+  lifecycle: experimental
+  owner: platform-team
+  system: parksmap

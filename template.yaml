@@ -41,26 +41,61 @@ spec:
           type: string
           description: Image tag to deploy
           default: 'latest'
+    - title: Repository Information
+      required:
+        - repoUrl
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - github.com
   steps:
-    - id: log
-      name: Log Deployment Info
-      action: debug:log
+    - id: fetch
+      name: Fetch Skeleton + Template
+      action: fetch:template
       input:
-        message: |
-          Deploying Parksmap Web Application:
-          - Name: ${{ parameters.name }}
-          - Namespace: ${{ parameters.namespace }}
-          - Replicas: ${{ parameters.replicas }}
-          - Image: quay.io/gpagiata/parksmap-web:${{ parameters.imageTag }}
+        url: ./skeleton
+        values:
+          name: ${{ parameters.name }}
+          namespace: ${{ parameters.namespace }}
+          replicas: ${{ parameters.replicas }}
+          imageTag: ${{ parameters.imageTag }}
+    
+    - id: publish
+      name: Publish
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        description: Parksmap deployment for ${{ parameters.name }}
+        repoUrl: ${{ parameters.repoUrl }}
+    
+    - id: register
+      name: Register
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
+        catalogInfoPath: '/catalog-info.yaml'
+
   output:
+    links:
+      - title: Repository
+        url: ${{ steps.publish.output.remoteUrl }}
+      - title: Open in catalog
+        icon: catalog
+        entityRef: ${{ steps.register.output.entityRef }}
     text:
-      - title: Deployment Configuration
+      - title: Next Steps
         content: |
-          **Parksmap Web Application Ready for Deployment**
+          Your Parksmap application repository has been created!
           
-          - **Application**: ${{ parameters.name }}
-          - **Namespace**: ${{ parameters.namespace }}
-          - **Image**: quay.io/gpagiata/parksmap-web:${{ parameters.imageTag }}
-          - **Replicas**: ${{ parameters.replicas }}
+          **What was created:**
+          - GitHub repository with deployment manifests
+          - Component registered in the catalog
           
-          Next: Use OpenShift console or CLI to apply the generated manifests.
+          **Next steps:**
+          1. Check the generated repository
+          2. Review the deployment manifests
+          3. Apply to OpenShift using the generated YAML files
